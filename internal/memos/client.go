@@ -48,9 +48,13 @@ func (c *Client) CreateMemo(content string, createdTime time.Time, dryRun bool) 
 		return c.saveDryRunMemo(content, createdTime)
 	}
 
+	// Convert to Unix timestamp (seconds since epoch)
+	createdTs := createdTime.Unix()
+	fmt.Printf("DEBUG: Creating memo with timestamp: %d (%s)\n", createdTs, createdTime.Format("2006-01-02 15:04:05"))
+
 	req := CreateMemoRequest{
 		Content:   content,
-		CreatedTs: createdTime.Unix(),
+		CreatedTs: createdTs,
 	}
 
 	body, err := json.Marshal(req)

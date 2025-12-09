@@ -166,11 +166,13 @@ func (m *Migrator) migratePage(page *notion.Page) error {
 		return nil
 	}
 
-	// Parse created time
+	// Parse created time from Notion (RFC3339 format)
 	createdTime, err := time.Parse(time.RFC3339, page.CreatedTime)
 	if err != nil {
-		// Fallback to current time if parsing fails
+		log.Printf("WARNING: Failed to parse created time for page '%s': %v. Using current time as fallback.\n", pageTitle, err)
 		createdTime = time.Now()
+	} else {
+		log.Printf("DEBUG: Parsed page '%s' created time: %s (Notion: %s)\n", pageTitle, createdTime.Format("2006-01-02 15:04:05"), page.CreatedTime)
 	}
 
 	// Create memo in Memos
