@@ -158,6 +158,14 @@ func (m *Migrator) migratePage(page *notion.Page) error {
 		return nil
 	}
 
+	// Check if content exceeds Memos API limit (8192 characters)
+	const memosMaxLength = 8192
+	if len(markdown) > memosMaxLength {
+		log.Printf("WARNING: Skipping page '%s' - content too long (%d chars, max %d). Consider splitting this page in Notion.\n",
+			pageTitle, len(markdown), memosMaxLength)
+		return nil
+	}
+
 	// Parse created time
 	createdTime, err := time.Parse(time.RFC3339, page.CreatedTime)
 	if err != nil {
