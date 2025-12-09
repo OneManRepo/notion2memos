@@ -29,9 +29,8 @@ func NewClient(baseURL, token string) *Client {
 
 // CreateMemoRequest represents the request to create a memo
 type CreateMemoRequest struct {
-	Content     string `json:"content"`
-	CreatedTs   int64  `json:"createdTs,omitempty"`
-	DisplayTime string `json:"displayTime,omitempty"`
+	Content    string `json:"content"`
+	CreateTime string `json:"createTime,omitempty"`
 }
 
 // CreateMemoResponse represents the response from creating a memo
@@ -49,16 +48,13 @@ func (c *Client) CreateMemo(content string, createdTime time.Time, dryRun bool) 
 		return c.saveDryRunMemo(content, createdTime)
 	}
 
-	// Convert to Unix timestamp (seconds since epoch)
-	createdTs := createdTime.Unix()
-	// Format as RFC3339 for displayTime field
-	displayTime := createdTime.Format(time.RFC3339)
-	fmt.Printf("DEBUG: Creating memo with timestamp: %d (%s) displayTime: %s\n", createdTs, createdTime.Format("2006-01-02 15:04:05"), displayTime)
+	// Format as RFC3339 for createTime field (Memos API v1)
+	createTime := createdTime.Format(time.RFC3339)
+	fmt.Printf("DEBUG: Creating memo with createTime: %s (%s)\n", createTime, createdTime.Format("2006-01-02 15:04:05"))
 
 	req := CreateMemoRequest{
-		Content:     content,
-		CreatedTs:   createdTs,
-		DisplayTime: displayTime,
+		Content:    content,
+		CreateTime: createTime,
 	}
 
 	body, err := json.Marshal(req)
