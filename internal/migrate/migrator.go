@@ -13,10 +13,12 @@ import (
 
 // Migrator coordinates the migration from Notion to Memos
 type Migrator struct {
-	notionClient *notion.Client
-	memosClient  *memos.Client
-	state        *config.State
-	dryRun       bool
+	notionClient  *notion.Client
+	memosClient   *memos.Client
+	state         *config.State
+	dryRun        bool
+	pageCache     map[string]*notion.Page
+	databaseCache map[string]*notion.Database
 }
 
 // NewMigrator creates a new Migrator
@@ -27,10 +29,12 @@ func NewMigrator(cfg *config.Config, dryRun bool) (*Migrator, error) {
 	}
 
 	return &Migrator{
-		notionClient: notion.NewClient(cfg.NotionToken),
-		memosClient:  memos.NewClient(cfg.MemosURL, cfg.MemosToken),
-		state:        state,
-		dryRun:       dryRun,
+		notionClient:  notion.NewClient(cfg.NotionToken),
+		memosClient:   memos.NewClient(cfg.MemosURL, cfg.MemosToken),
+		state:         state,
+		dryRun:        dryRun,
+		pageCache:     make(map[string]*notion.Page),
+		databaseCache: make(map[string]*notion.Database),
 	}, nil
 }
 
@@ -127,8 +131,8 @@ func (m *Migrator) migratePage(page *notion.Page) error {
 		return nil
 	}
 
-	// Get parent tags
-	tags, err := m.notionClient.GetParentTags(page)
+	// Get parent tags (using cache)
+	tags, err := m.getParentTagsCached(page)
 	if err != nil {
 		// Log warning but continue - tags are not critical
 		log.Printf("Warning: failed to retrieve parent tags for page %s: %v\n", page.GetPageTitle(), err)
@@ -199,4 +203,62 @@ func (m *Migrator) filterProcessedPages(pages []notion.Page) []notion.Page {
 		}
 	}
 	return filtered
+}
+
+// getPageCached retrieves a page with caching
+func (m *Migrator) getPageCached(pageID string) (*notion.Page, error) {
+	if cached, ok := m.pageCache[pageID]; ok {
+		return cached, nil
+	}
+
+	page, err := m.notionClient.RetrievePage(pageID)
+	if err != nil {
+		return nil, err
+	}
+
+	m.pageCache[pageID] = page
+	return page, nil
+}
+
+// getDatabaseCached retrieves a database with caching
+func (m *Migrator) getDatabaseCached(databaseID string) (*notion.Database, error) {
+	if cached, ok := m.databaseCache[databaseID]; ok {
+		return cached, nil
+	}
+
+	database, err := m.notionClient.RetrieveDatabase(databaseID)
+	if err != nil {
+		return nil, err
+	}
+
+	m.databaseCache[databaseID] = database
+	return database, nil
+}
+
+// getParentTagsCached retrieves parent tags with caching
+func (m *Migrator) getParentTagsCached(page *notion.Page) ([]string, error) {
+	var tags []string
+
+	// Check if parent is a database
+	if dbID := page.GetParentDatabaseID(); dbID != "" {
+		database, err := m.getDatabaseCached(dbID)
+		if err == nil {
+			tags = append(tags, database.GetDatabaseTitle())
+		}
+	}
+
+	// Walk up the page parent chain (max 10 levels to prevent infinite loops)
+	currentPageID := page.GetParentPageID()
+	for i := 0; i < 10 && currentPageID != ""; i++ {
+		parentPage, err := m.getPageCached(currentPageID)
+		if err != nil {
+			// If we can't retrieve the parent, just return what we have
+			break
+		}
+
+		tags = append([]string{parentPage.GetPageTitle()}, tags...) // Prepend to maintain hierarchy
+		currentPageID = parentPage.GetParentPageID()
+	}
+
+	return tags, nil
 }
