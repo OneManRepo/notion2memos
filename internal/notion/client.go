@@ -296,3 +296,31 @@ func (p *Page) GetPageTitle() string {
 	}
 	return "Untitled"
 }
+
+// GetParentPageID extracts the parent page ID if the parent is a page
+func (p *Page) GetParentPageID() string {
+	if pageID, ok := p.Parent["page_id"].(string); ok {
+		return pageID
+	}
+	return ""
+}
+
+// GetParentTags retrieves all parent page titles as tags
+func (c *Client) GetParentTags(page *Page) ([]string, error) {
+	var tags []string
+	currentPageID := page.GetParentPageID()
+
+	// Walk up the parent chain (max 10 levels to prevent infinite loops)
+	for i := 0; i < 10 && currentPageID != ""; i++ {
+		parentPage, err := c.RetrievePage(currentPageID)
+		if err != nil {
+			// If we can't retrieve the parent, just return what we have
+			break
+		}
+
+		tags = append([]string{parentPage.GetPageTitle()}, tags...) // Prepend to maintain hierarchy
+		currentPageID = parentPage.GetParentPageID()
+	}
+
+	return tags, nil
+}

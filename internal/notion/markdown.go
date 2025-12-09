@@ -7,8 +7,21 @@ import (
 )
 
 // BlocksToMarkdown converts Notion blocks to Markdown format
-func BlocksToMarkdown(blocks []Block, createdTime string) (string, error) {
+func BlocksToMarkdown(blocks []Block, createdTime, pageTitle string, tags []string) (string, error) {
 	var md strings.Builder
+
+	// Add page title as H1
+	if pageTitle != "" {
+		md.WriteString("# " + pageTitle + "\n\n")
+	}
+
+	// Add tags if present
+	if len(tags) > 0 {
+		for _, tag := range tags {
+			md.WriteString("#" + sanitizeTag(tag) + " ")
+		}
+		md.WriteString("\n\n")
+	}
 
 	// Add creation timestamp as metadata comment
 	if createdTime != "" {
@@ -43,17 +56,17 @@ func blockToMarkdown(block *Block) string {
 	case "heading_1":
 		if block.Heading1 != nil {
 			text := richTextToMarkdown(block.Heading1.RichText)
-			return "# " + text + "\n"
+			return "## " + text + "\n"
 		}
 	case "heading_2":
 		if block.Heading2 != nil {
 			text := richTextToMarkdown(block.Heading2.RichText)
-			return "## " + text + "\n"
+			return "### " + text + "\n"
 		}
 	case "heading_3":
 		if block.Heading3 != nil {
 			text := richTextToMarkdown(block.Heading3.RichText)
-			return "### " + text + "\n"
+			return "#### " + text + "\n"
 		}
 	case "bulleted_list_item":
 		if block.BulletedList != nil {
@@ -131,6 +144,20 @@ func richTextToPlainText(richTexts []RichText) string {
 	var result strings.Builder
 	for _, rt := range richTexts {
 		result.WriteString(rt.PlainText)
+	}
+	return result.String()
+}
+
+// sanitizeTag removes spaces and special characters from tags
+func sanitizeTag(tag string) string {
+	// Replace spaces with underscores
+	tag = strings.ReplaceAll(tag, " ", "_")
+	// Remove any characters that aren't alphanumeric, underscore, or hyphen
+	var result strings.Builder
+	for _, r := range tag {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
+			result.WriteRune(r)
+		}
 	}
 	return result.String()
 }

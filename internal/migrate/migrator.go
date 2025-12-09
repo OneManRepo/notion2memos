@@ -118,15 +118,31 @@ func (m *Migrator) migratePage(page *notion.Page) error {
 		return fmt.Errorf("failed to retrieve blocks: %w", err)
 	}
 
-	// Convert blocks to Markdown
-	markdown, err := notion.BlocksToMarkdown(blocks, page.CreatedTime)
+	// Get page title
+	pageTitle := page.GetPageTitle()
+
+	// Skip pages with no content blocks
+	if len(blocks) == 0 {
+		log.Printf("Skipping empty page (no blocks): %s\n", pageTitle)
+		return nil
+	}
+
+	// Get parent tags
+	tags, err := m.notionClient.GetParentTags(page)
+	if err != nil {
+		// Log warning but continue - tags are not critical
+		log.Printf("Warning: failed to retrieve parent tags for page %s: %v\n", page.GetPageTitle(), err)
+	}
+
+	// Convert blocks to Markdown with title and tags
+	markdown, err := notion.BlocksToMarkdown(blocks, page.CreatedTime, pageTitle, tags)
 	if err != nil {
 		return fmt.Errorf("failed to convert to markdown: %w", err)
 	}
 
-	// If content is empty, skip
+	// If content is empty after conversion, skip
 	if markdown == "" {
-		log.Printf("Skipping empty page: %s\n", page.GetPageTitle())
+		log.Printf("Skipping empty page: %s\n", pageTitle)
 		return nil
 	}
 
