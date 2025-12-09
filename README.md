@@ -9,8 +9,14 @@ A CLI tool to migrate your notes from Notion to Memos (https://usememos.com/).
 - ⏸️ **Resume Capability**: Resume interrupted migrations from where you left off
 - 🧪 **Dry-Run Mode**: Preview migrations without actually creating memos
 - 📝 **Markdown Support**: Converts Notion blocks to Markdown format
-- ⏱️ **Timestamp Preservation**: Maintains original creation timestamps
+- ⏱️ **Timestamp Preservation**: Maintains original creation timestamps with correct display time
 - 🚦 **Rate Limiting**: Respects Notion's API rate limits (3 req/sec)
+- 🏷️ **Smart Tagging**: Automatically tags memos with parent page/database names (excludes date-pattern titles like "MM.YY Name")
+- 📊 **Database Support**: Detects and tags pages that belong to Notion databases
+- ✂️ **Auto-Splitting**: Automatically splits large pages (>8192 chars) into multiple linked memos
+- 🔍 **Empty Page Filtering**: Skips pages with no content
+- 📑 **Header Hierarchy**: Page title becomes H1, original headers shift down (H1→H2, H2→H3, H3→H4)
+- ⚡ **Performance Optimized**: Caches parent pages and databases to speed up migration
 - ✅ **Supported Block Types**:
   - Paragraphs
   - Headings (H1, H2, H3)
@@ -145,13 +151,34 @@ See `config.example.yaml` for a complete example.
 
 The tool tracks processed pages in `~/.notion2memos/state.json` to support resuming. Use `notion2memos reset` to clear this state.
 
+## How It Works
+
+### Content Transformation
+
+1. **Page Title**: Becomes the H1 header in the memo
+2. **Headers**: Original headers shift down one level (H1→H2, H2→H3, H3→H4)
+3. **Tags**: Automatically generated from:
+   - Parent database name (e.g., pages in "Tagebuch" database get `#tagebuch` tag)
+   - Parent page hierarchy (excluding date-pattern titles like "08.12. Something")
+   - Tags are sanitized: spaces and dots become underscores
+4. **Timestamp**: Preserves the original Notion creation time
+5. **Long Content**: Pages exceeding 8192 characters are automatically split into multiple memos with:
+   - Numbered titles: `Original Title (1/2)`, `Original Title (2/2)`
+   - Continuation markers: `...` at split points
+   - Sequential timestamps (5 seconds apart)
+
+### Performance
+
+- **Caching**: Parent pages and databases are cached to minimize API calls
+- **Rate Limiting**: Respects Notion's 3 requests/second limit
+- **Progress Tracking**: Real-time progress bar shows migration status
+
 ## Limitations
 
-- Only migrates simple text notes with basic formatting
-- Nested pages are treated as separate pages
-- Databases are not fully supported
-- Some Notion block types are not yet implemented (images, embeds, etc.)
-- Requires pages to be explicitly shared with the integration
+- Some Notion block types are not yet implemented (images, embeds, tables, etc.)
+- Requires pages to be explicitly shared with the Notion integration
+- Memos has a 8192 character limit per memo (automatically handled by splitting)
+- Nested pages are treated as separate pages with parent tags
 
 ## Contributing
 
