@@ -329,6 +329,30 @@ func (m *Migrator) getDatabaseCached(databaseID string) (*notion.Database, error
 	return database, nil
 }
 
+// isDatePatternTitle checks if a title matches the pattern "MM.YY <Name>"
+func isDatePatternTitle(title string) bool {
+	if len(title) < 6 {
+		return false
+	}
+
+	// Check for pattern: DD.MM or MM.YY at the start
+	// Examples: "01.25 <Name>", "08.12. <Name>", "11.10. <Name>"
+	if len(title) >= 5 {
+		// Check if starts with NN.NN pattern
+		if title[2] == '.' &&
+			(title[0] >= '0' && title[0] <= '9') &&
+			(title[1] >= '0' && title[1] <= '9') &&
+			(title[3] >= '0' && title[3] <= '9') &&
+			(title[4] >= '0' && title[4] <= '9') {
+			// Check if followed by space or dot+space
+			if len(title) > 5 && (title[5] == ' ' || (title[5] == '.' && len(title) > 6 && title[6] == ' ')) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // getParentTagsCached retrieves parent tags with caching
 func (m *Migrator) getParentTagsCached(page *notion.Page) ([]string, error) {
 	var tags []string
@@ -350,7 +374,11 @@ func (m *Migrator) getParentTagsCached(page *notion.Page) ([]string, error) {
 			break
 		}
 
-		tags = append([]string{parentPage.GetPageTitle()}, tags...) // Prepend to maintain hierarchy
+		parentTitle := parentPage.GetPageTitle()
+		// Only add as tag if it doesn't match the date pattern
+		if !isDatePatternTitle(parentTitle) {
+			tags = append([]string{parentTitle}, tags...) // Prepend to maintain hierarchy
+		}
 		currentPageID = parentPage.GetParentPageID()
 	}
 
