@@ -150,8 +150,9 @@ func richTextToPlainText(richTexts []RichText) string {
 
 // sanitizeTag removes spaces and special characters from tags
 func sanitizeTag(tag string) string {
-	// Replace spaces with underscores
+	// Replace spaces and dots with underscores
 	tag = strings.ReplaceAll(tag, " ", "_")
+	tag = strings.ReplaceAll(tag, ".", "_")
 	// Remove any characters that aren't alphanumeric, underscore, or hyphen
 	var result strings.Builder
 	for _, r := range tag {
