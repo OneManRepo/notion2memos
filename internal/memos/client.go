@@ -29,17 +29,22 @@ func NewClient(baseURL, token string) *Client {
 
 // CreateMemoRequest represents the request to create a memo
 type CreateMemoRequest struct {
-	Content    string `json:"content"`
-	CreateTime string `json:"createTime,omitempty"`
+	Content string `json:"content"`
+}
+
+// UpdateMemoRequest represents the request to update memo fields
+type UpdateMemoRequest struct {
+	DisplayTime string `json:"displayTime,omitempty"`
 }
 
 // CreateMemoResponse represents the response from creating a memo
 type CreateMemoResponse struct {
-	ID        int    `json:"id"`
-	Name      string `json:"name"`
-	UID       string `json:"uid"`
-	Content   string `json:"content"`
-	CreatedTs int64  `json:"createdTs"`
+	Name        string `json:"name"`
+	Creator     string `json:"creator"`
+	CreateTime  string `json:"createTime"`
+	UpdateTime  string `json:"updateTime"`
+	DisplayTime string `json:"displayTime"`
+	Content     string `json:"content"`
 }
 
 // CreateMemo creates a new memo in Memos
@@ -48,21 +53,15 @@ func (c *Client) CreateMemo(content string, createdTime time.Time, dryRun bool) 
 		return c.saveDryRunMemo(content, createdTime)
 	}
 
-	// Format as RFC3339 for createTime field (Memos API v1)
-	createTime := createdTime.Format(time.RFC3339)
-	fmt.Printf("DEBUG: Creating memo with createTime: %s (%s)\n", createTime, createdTime.Format("2006-01-02 15:04:05"))
-
+	// Step 1: Create the memo
 	req := CreateMemoRequest{
-		Content:    content,
-		CreateTime: createTime,
+		Content: content,
 	}
 
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
-
-	fmt.Printf("DEBUG: Request body: %s\n", string(body))
 
 	httpReq, err := http.NewRequest("POST", c.baseURL+"/api/v1/memos", bytes.NewReader(body))
 	if err != nil {
@@ -83,12 +82,50 @@ func (c *Client) CreateMemo(content string, createdTime time.Time, dryRun bool) 
 		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
+	// Parse the response to get the memo name (ID)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
 	var memoResp CreateMemoResponse
-	if err := json.NewDecoder(resp.Body).Decode(&memoResp); err != nil {
+	if err := json.Unmarshal(bodyBytes, &memoResp); err != nil {
 		return fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	fmt.Printf("DEBUG: Response createdTs: %d (%s)\n", memoResp.CreatedTs, time.Unix(memoResp.CreatedTs, 0).Format("2006-01-02 15:04:05"))
+	// Step 2: Update the displayTime via PATCH
+	displayTime := createdTime.Format(time.RFC3339)
+	updateReq := UpdateMemoRequest{
+		DisplayTime: displayTime,
+	}
+
+	updateBody, err := json.Marshal(updateReq)
+	if err != nil {
+		return fmt.Errorf("failed to marshal update request: %w", err)
+	}
+
+	// PATCH request to update displayTime
+	patchURL := fmt.Sprintf("%s/api/v1/%s", c.baseURL, memoResp.Name)
+	patchReq, err := http.NewRequest("PATCH", patchURL, bytes.NewReader(updateBody))
+	if err != nil {
+		return fmt.Errorf("failed to create patch request: %w", err)
+	}
+
+	patchReq.Header.Set("Authorization", "Bearer "+c.token)
+	patchReq.Header.Set("Content-Type", "application/json")
+
+	patchResp, err := c.httpClient.Do(patchReq)
+	if err != nil {
+		return fmt.Errorf("patch request failed: %w", err)
+	}
+	defer patchResp.Body.Close()
+
+	if patchResp.StatusCode < 200 || patchResp.StatusCode >= 300 {
+		patchBodyBytes, _ := io.ReadAll(patchResp.Body)
+		return fmt.Errorf("patch request failed with status %d: %s", patchResp.StatusCode, string(patchBodyBytes))
+	}
+
+	fmt.Printf("DEBUG: Updated memo %s with displayTime: %s\n", memoResp.Name, displayTime)
 
 	return nil
 }
