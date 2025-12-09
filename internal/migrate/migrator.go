@@ -1,14 +1,14 @@
 package migrate
 
 import (
-"fmt"
-"log"
-"time"
+	"fmt"
+	"log"
+	"time"
 
-"github.com/OneManRepo/notion2memos/internal/config"
-"github.com/OneManRepo/notion2memos/internal/memos"
-"github.com/OneManRepo/notion2memos/internal/notion"
-"github.com/schollz/progressbar/v3"
+	"github.com/OneManRepo/notion2memos/internal/config"
+	"github.com/OneManRepo/notion2memos/internal/memos"
+	"github.com/OneManRepo/notion2memos/internal/notion"
+	"github.com/schollz/progressbar/v3"
 )
 
 // Migrator coordinates the migration from Notion to Memos
