@@ -305,12 +305,67 @@ func (p *Page) GetParentPageID() string {
 	return ""
 }
 
+// GetParentDatabaseID extracts the parent database ID if the parent is a database
+func (p *Page) GetParentDatabaseID() string {
+	if dbID, ok := p.Parent["database_id"].(string); ok {
+		return dbID
+	}
+	return ""
+}
+
+// Database represents a Notion database
+type Database struct {
+	Object string                 `json:"object"`
+	ID     string                 `json:"id"`
+	Title  []RichText             `json:"title"`
+	Parent map[string]interface{} `json:"parent"`
+}
+
+// GetDatabaseTitle extracts the title from a database
+func (d *Database) GetDatabaseTitle() string {
+	if len(d.Title) > 0 {
+		return d.Title[0].PlainText
+	}
+	return "Untitled Database"
+}
+
+// RetrieveDatabase retrieves a database by ID
+func (c *Client) RetrieveDatabase(databaseID string) (*Database, error) {
+	req, err := http.NewRequest("GET", notionAPIBase+"/databases/"+databaseID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var database Database
+	if err := json.NewDecoder(resp.Body).Decode(&database); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &database, nil
+}
+
 // GetParentTags retrieves all parent page titles as tags
 func (c *Client) GetParentTags(page *Page) ([]string, error) {
 	var tags []string
-	currentPageID := page.GetParentPageID()
 
-	// Walk up the parent chain (max 10 levels to prevent infinite loops)
+	// Check if parent is a database
+	if dbID := page.GetParentDatabaseID(); dbID != "" {
+		database, err := c.RetrieveDatabase(dbID)
+		if err == nil {
+			tags = append(tags, database.GetDatabaseTitle())
+		}
+		// Note: We don't continue up the chain for databases as they might have page parents
+		// which we could add if needed
+	}
+
+	// Walk up the page parent chain (max 10 levels to prevent infinite loops)
+	currentPageID := page.GetParentPageID()
 	for i := 0; i < 10 && currentPageID != ""; i++ {
 		parentPage, err := c.RetrievePage(currentPageID)
 		if err != nil {

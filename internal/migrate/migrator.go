@@ -134,6 +134,14 @@ func (m *Migrator) migratePage(page *notion.Page) error {
 		log.Printf("Warning: failed to retrieve parent tags for page %s: %v\n", page.GetPageTitle(), err)
 	}
 
+	// Add "tagebuch" tag if page is from Tagebuch database or has Tagebuch parent
+	for _, tag := range tags {
+		if tag == "Tagebuch" {
+			tags = append(tags, "tagebuch")
+			break
+		}
+	}
+
 	// Convert blocks to Markdown with title and tags
 	markdown, err := notion.BlocksToMarkdown(blocks, page.CreatedTime, pageTitle, tags)
 	if err != nil {
