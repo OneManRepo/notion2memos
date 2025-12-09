@@ -29,8 +29,9 @@ func NewClient(baseURL, token string) *Client {
 
 // CreateMemoRequest represents the request to create a memo
 type CreateMemoRequest struct {
-	Content   string `json:"content"`
-	CreatedTs int64  `json:"createdTs,omitempty"`
+	Content     string `json:"content"`
+	CreatedTs   int64  `json:"createdTs,omitempty"`
+	DisplayTime string `json:"displayTime,omitempty"`
 }
 
 // CreateMemoResponse represents the response from creating a memo
@@ -50,17 +51,22 @@ func (c *Client) CreateMemo(content string, createdTime time.Time, dryRun bool) 
 
 	// Convert to Unix timestamp (seconds since epoch)
 	createdTs := createdTime.Unix()
-	fmt.Printf("DEBUG: Creating memo with timestamp: %d (%s)\n", createdTs, createdTime.Format("2006-01-02 15:04:05"))
+	// Format as RFC3339 for displayTime field
+	displayTime := createdTime.Format(time.RFC3339)
+	fmt.Printf("DEBUG: Creating memo with timestamp: %d (%s) displayTime: %s\n", createdTs, createdTime.Format("2006-01-02 15:04:05"), displayTime)
 
 	req := CreateMemoRequest{
-		Content:   content,
-		CreatedTs: createdTs,
+		Content:     content,
+		CreatedTs:   createdTs,
+		DisplayTime: displayTime,
 	}
 
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
+
+	fmt.Printf("DEBUG: Request body: %s\n", string(body))
 
 	httpReq, err := http.NewRequest("POST", c.baseURL+"/api/v1/memos", bytes.NewReader(body))
 	if err != nil {
@@ -85,6 +91,8 @@ func (c *Client) CreateMemo(content string, createdTime time.Time, dryRun bool) 
 	if err := json.NewDecoder(resp.Body).Decode(&memoResp); err != nil {
 		return fmt.Errorf("failed to decode response: %w", err)
 	}
+
+	fmt.Printf("DEBUG: Response createdTs: %d (%s)\n", memoResp.CreatedTs, time.Unix(memoResp.CreatedTs, 0).Format("2006-01-02 15:04:05"))
 
 	return nil
 }
