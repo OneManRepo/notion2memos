@@ -3,6 +3,7 @@ package migrate
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/OneManRepo/notion2memos/internal/config"
@@ -158,26 +159,109 @@ func (m *Migrator) migratePage(page *notion.Page) error {
 		return nil
 	}
 
-	// Check if content exceeds Memos API limit (8192 characters)
-	const memosMaxLength = 8192
-	if len(markdown) > memosMaxLength {
-		log.Printf("WARNING: Skipping page '%s' - content too long (%d chars, max %d). Consider splitting this page in Notion.\n",
-			pageTitle, len(markdown), memosMaxLength)
-		return nil
-	}
-
 	// Parse created time from Notion (RFC3339 format)
 	createdTime, err := time.Parse(time.RFC3339, page.CreatedTime)
 	if err != nil {
 		log.Printf("WARNING: Failed to parse created time for page '%s': %v. Using current time as fallback.\n", pageTitle, err)
 		createdTime = time.Now()
-	} else {
-		log.Printf("DEBUG: Parsed page '%s' created time: %s (Notion: %s)\n", pageTitle, createdTime.Format("2006-01-02 15:04:05"), page.CreatedTime)
 	}
 
-	// Create memo in Memos
-	if err := m.memosClient.CreateMemo(markdown, createdTime, m.dryRun); err != nil {
-		return fmt.Errorf("failed to create memo: %w", err)
+	// Check if content exceeds Memos API limit and split if necessary
+	const memosMaxLength = 8192
+	if len(markdown) > memosMaxLength {
+		log.Printf("Page '%s' exceeds character limit (%d chars). Splitting into multiple memos...\n", pageTitle, len(markdown))
+		if err := m.createSplitMemos(markdown, pageTitle, createdTime); err != nil {
+			return fmt.Errorf("failed to create split memos: %w", err)
+		}
+	} else {
+		// Create single memo in Memos
+		if err := m.memosClient.CreateMemo(markdown, createdTime, m.dryRun); err != nil {
+			return fmt.Errorf("failed to create memo: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// createSplitMemos splits a long memo into multiple parts and creates them
+func (m *Migrator) createSplitMemos(content, pageTitle string, createdTime time.Time) error {
+	const memosMaxLength = 8192
+	const splitMarker = "\n\n..."
+	const continuationMarker = "...\n\n"
+
+	// Calculate safe chunk size (leaving room for markers and title modification)
+	const safeChunkSize = memosMaxLength - 200 // Reserve space for title, tags, and markers
+
+	var parts []string
+	remaining := content
+
+	// Split content into chunks
+	for len(remaining) > safeChunkSize {
+		// Find a good breaking point (end of line) before the chunk size
+		breakPoint := safeChunkSize
+		for breakPoint > 0 && remaining[breakPoint] != '\n' {
+			breakPoint--
+		}
+
+		// If no newline found, just break at chunk size
+		if breakPoint == 0 {
+			breakPoint = safeChunkSize
+		}
+
+		parts = append(parts, remaining[:breakPoint])
+		remaining = remaining[breakPoint:]
+
+		// Trim leading whitespace from remaining content
+		for len(remaining) > 0 && (remaining[0] == '\n' || remaining[0] == ' ') {
+			remaining = remaining[1:]
+		}
+	}
+
+	// Add the final part
+	if len(remaining) > 0 {
+		parts = append(parts, remaining)
+	}
+
+	log.Printf("Split page '%s' into %d parts\n", pageTitle, len(parts))
+
+	// Create each part as a separate memo
+	for i, part := range parts {
+		partNumber := i + 1
+		partTitle := fmt.Sprintf("%s (%d/%d)", pageTitle, partNumber, len(parts))
+
+		// Replace the original title with the numbered title
+		lines := strings.Split(part, "\n")
+		var contentWithoutTitle string
+		startIndex := 0
+
+		// Find and remove the original title if present
+		if len(lines) > 0 && strings.HasPrefix(lines[0], "# ") {
+			startIndex = 1
+		}
+		contentWithoutTitle = strings.Join(lines[startIndex:], "\n")
+
+		// Build the memo content with markers
+		var memoContent string
+		if i == 0 {
+			// First part: title + content + "..."
+			memoContent = "# " + partTitle + "\n\n" + contentWithoutTitle + splitMarker
+		} else if i == len(parts)-1 {
+			// Last part: title + "..." + content
+			memoContent = "# " + partTitle + "\n\n" + continuationMarker + contentWithoutTitle
+		} else {
+			// Middle parts: title + "..." + content + "..."
+			memoContent = "# " + partTitle + "\n\n" + continuationMarker + contentWithoutTitle + splitMarker
+		}
+
+		// Offset creation time by a few seconds for each part
+		partCreatedTime := createdTime.Add(time.Duration(i*5) * time.Second)
+
+		// Create the memo
+		if err := m.memosClient.CreateMemo(memoContent, partCreatedTime, m.dryRun); err != nil {
+			return fmt.Errorf("failed to create memo part %d: %w", partNumber, err)
+		}
+
+		log.Printf("Created memo part %d/%d for page '%s'\n", partNumber, len(parts), pageTitle)
 	}
 
 	return nil

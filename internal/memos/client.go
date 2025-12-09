@@ -125,8 +125,6 @@ func (c *Client) CreateMemo(content string, createdTime time.Time, dryRun bool) 
 		return fmt.Errorf("patch request failed with status %d: %s", patchResp.StatusCode, string(patchBodyBytes))
 	}
 
-	fmt.Printf("DEBUG: Updated memo %s with displayTime: %s\n", memoResp.Name, displayTime)
-
 	return nil
 }
 
