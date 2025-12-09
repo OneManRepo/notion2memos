@@ -138,10 +138,10 @@ func (m *Migrator) migratePage(page *notion.Page) error {
 		log.Printf("Warning: failed to retrieve parent tags for page %s: %v\n", page.GetPageTitle(), err)
 	}
 
-	// Add "tagebuch" tag if page is from Tagebuch database or has Tagebuch parent
-	for _, tag := range tags {
+	// Replace "Tagebuch" tag with "tagebuch" (lowercase)
+	for i, tag := range tags {
 		if tag == "Tagebuch" {
-			tags = append(tags, "tagebuch")
+			tags[i] = "tagebuch"
 			break
 		}
 	}
